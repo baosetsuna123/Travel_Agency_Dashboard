@@ -9,9 +9,10 @@ import {world_map} from "~/constants/world_map";
 import {ButtonComponent} from "@syncfusion/ej2-react-buttons";
 import {account} from "~/appwrite/client";
 import {useNavigate} from "react-router";
+import toast from "react-hot-toast";
 
 export const loader = async () => {
-    const response = await fetch('https://restcountries.com/v3.1/all');
+    const response = await fetch('https://restcountries.com/v3.1/independent?status=true');
     const data = await response.json();
 
     return data.map((country: any) => ({
@@ -38,58 +39,73 @@ const CreateTrip = ({ loaderData }: Route.ComponentProps ) => {
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-       e.preventDefault()
-        setLoading(true);
+  e.preventDefault();
+  setError(null);
+  setLoading(true);
 
-       if(
-           !formData.country ||
-           !formData.travelStyle ||
-           !formData.interest ||
-           !formData.budget ||
-           !formData.groupType
-       ) {
-           setError('Please provide values for all fields');
-           setLoading(false)
-           return;
-       }
+  // Validate
+  if (
+    !formData.country ||
+    !formData.travelStyle ||
+    !formData.interest ||
+    !formData.budget ||
+    !formData.groupType
+  ) {
+    toast.error('Please provide values for all fields');
+    setLoading(false);
+    return;
+  }
 
-       if(formData.duration < 1 || formData.duration > 10) {
-           setError('Duration must be between 1 and 10 days');
-           setLoading(false)
-           return;
-       }
-       const user = await account.get();
-       if(!user.$id) {
-           console.error('User not authenticated');
-           setLoading(false)
-           return;
-       }
+  if (formData.duration < 1 || formData.duration > 10) {
+    toast.error('Duration must be between 1 and 10 days');
+    setLoading(false);
+    return;
+  }
 
-       try {
-           const response = await fetch('/api/create-trip', {
-               method: 'POST',
-               headers: { 'Content-Type': 'application/json'},
-               body: JSON.stringify({
-                   country: formData.country,
-                   numberOfDays: formData.duration,
-                   travelStyle: formData.travelStyle,
-                   interests: formData.interest,
-                   budget: formData.budget,
-                   groupType: formData.groupType,
-                   userId: user.$id
-               })
-           })
+  try {
+    const user = await account.get();
+    if (!user?.$id) {
+      toast.error('You must be logged in');
+      setLoading(false);
+      return;
+    }
 
-           const result: CreateTripResponse = await response.json();
+    const response = await fetch('/api/create-trip', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        country: formData.country,
+        numberOfDays: formData.duration,
+        travelStyle: formData.travelStyle,
+        interests: formData.interest,
+        budget: formData.budget,
+        groupType: formData.groupType,
+        userId: user.$id,
+      }),
+    });
 
-           if(result?.id) navigate(`/trips/${result.id}`)
-           else console.error('Failed to generate a trip')
-       } catch (e) {
-           console.error('Error generating trip', e);
-       } finally {
-           setLoading(false)
-       }
-    };
+    // ❗ CHECK HTTP STATUS TRƯỚC
+    if (!response.ok) {
+      toast.error('Something went wrong!');
+      setLoading(false);
+      return;
+    }
+
+    const result: CreateTripResponse = await response.json();
+
+    if (result?.id) {
+      toast.success('Trip generated successfully!');
+      navigate(`/trips/${result.id}`);
+    } else {
+      toast.error('Something went wrong!');
+    }
+  } catch (error) {
+    console.error(error);
+    toast.error('Something went wrong!');
+  } finally {
+    setLoading(false);
+  }
+};
 
     const handleChange = (key: keyof TripFormData, value: string | number)  => {
     setFormData({ ...formData, [key]: value})
